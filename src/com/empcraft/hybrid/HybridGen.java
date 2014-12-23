@@ -26,6 +26,8 @@ import com.intellectualcrafters.plot.object.PlotBlock;
 import com.intellectualcrafters.plot.object.PlotGenerator;
 import com.intellectualcrafters.plot.object.PlotManager;
 import com.intellectualcrafters.plot.object.PlotWorld;
+
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
@@ -48,22 +50,26 @@ public class HybridGen extends PlotGenerator {
      * Set to static to re-use the same managet for all Default World Generators
      */
     private static PlotManager manager = null;
+    
+    public static short[][] initResult;
     /**
      * Some generator specific variables (implementation dependent)
      */
     final int plotsize;
     final int pathsize;
-    final PlotBlock wall;
-    final PlotBlock wallfilling;
-    final PlotBlock floor1;
-    final PlotBlock floor2;
+    final short wall;
+    final short wallfilling;
+    final short roadblock;
+    final short roadstripes;
     final int size;
     final Biome biome;
     final int roadheight;
     final int wallheight;
     final int plotheight;
-    final PlotBlock[] plotfloors;
-    final PlotBlock[] filling;
+    final short[] plotfloors;
+    final short[] filling;
+    final short pathWidthLower;
+    final short pathWidthUpper;
     /**
      * result object is returned for each generated chunk, do stuff to it
      */
@@ -75,7 +81,7 @@ public class HybridGen extends PlotGenerator {
     /**
      * Faster sudo-random number generator than java.util.random
      */
-    private long state;
+    private long state = 13;
 
     /**
      * Initialize variables, and create plotworld object used in calculations
@@ -90,20 +96,49 @@ public class HybridGen extends PlotGenerator {
 
         this.pathsize = this.plotworld.ROAD_WIDTH;
 
-        this.floor1 = this.plotworld.ROAD_BLOCK;
-        this.floor2 = this.plotworld.ROAD_STRIPES;
+        this.roadblock = this.plotworld.ROAD_BLOCK.id;
+        this.roadstripes = this.plotworld.ROAD_STRIPES.id;
 
-        this.wallfilling = this.plotworld.WALL_FILLING;
+        this.wallfilling = this.plotworld.WALL_FILLING.id;
         this.size = this.pathsize + this.plotsize;
-        this.wall = this.plotworld.WALL_BLOCK;
+        this.wall = this.plotworld.WALL_BLOCK.id;
 
-        this.plotfloors = this.plotworld.TOP_BLOCK;
-        this.filling = this.plotworld.MAIN_BLOCK;
+        this.plotfloors = new short[this.plotworld.TOP_BLOCK.length];
+        for (int i = 0; i < this.plotworld.TOP_BLOCK.length; i++) {
+            this.plotfloors[i] = this.plotworld.TOP_BLOCK[i].id;
+        }
+        
+        this.filling = new short[this.plotworld.MAIN_BLOCK.length];
+        for (int i = 0; i < this.plotworld.MAIN_BLOCK.length; i++) {
+            this.filling[i] = this.plotworld.MAIN_BLOCK[i].id;
+        }
+        
         this.wallheight = this.plotworld.WALL_HEIGHT;
         this.roadheight = this.plotworld.ROAD_HEIGHT;
         this.plotheight = this.plotworld.PLOT_HEIGHT;
 
+        if ((this.pathsize % 2) == 0) {
+            this.pathWidthLower = (short) (Math.floor(this.pathsize / 2) - 1);
+        } else {
+            this.pathWidthLower = (short) (Math.floor(this.pathsize / 2));
+        }
+        
+        this.pathWidthUpper = (short) (this.pathWidthLower + this.plotsize + 1);
+        
         this.biome = this.plotworld.PLOT_BIOME;
+        int maxY;
+        try {
+            maxY = Bukkit.getWorld(world).getMaxHeight();
+        }
+        catch (NullPointerException e) {
+            maxY = 256;
+        }
+        this.initResult = new short[maxY / 16][];
+        for (short x = 0; x < 16; x++) {
+            for (short z = 0; z < 16; z++) {
+                setBlock(this.initResult, x, 0, z, (short) 7);
+            }
+        }
     }
 
     /**
@@ -152,40 +187,19 @@ public class HybridGen extends PlotGenerator {
         final long r = ((nextLong() >>> 32) * n) >> 32;
         return (int) r;
     }
-
-    /**
-     * Cuboid based plot generation is quick, as it requires no calculations inside the loop - You don't have to use
-     * this this method, but you may find it useful.
-     */
-    public void setCuboidRegion(final int x1, final int x2, final int y1, final int y2, final int z1, final int z2, final PlotBlock block) {
-        for (int x = x1; x < x2; x++) {
-            for (int z = z1; z < z2; z++) {
-                for (int y = y1; y < y2; y++) {
-                    setBlock(this.result, x, y, z, block.id);
-                }
-            }
+    private void setBlock(short[][] result, int x, int y, int z, short[] blkids) {
+        if (blkids.length == 1) {
+            setBlock(result, x, y, z, blkids[0]);
+        }
+        else {
+            final int i = random(blkids.length);
+            setBlock(result, x, y, z, blkids[i]);
         }
     }
-
-    private void setCuboidRegion(final int x1, final int x2, final int y1, final int y2, final int z1, final int z2, final PlotBlock[] blocks) {
-        if (blocks.length == 1) {
-            setCuboidRegion(x1, x2, y1, y2, z1, z2, blocks[0]);
-        } else {
-            for (int x = x1; x < x2; x++) {
-                for (int z = z1; z < z2; z++) {
-                    for (int y = y1; y < y2; y++) {
-                        final int i = random(blocks.length);
-                        setBlock(this.result, x, y, z, blocks[i].id);
-                    }
-                }
-            }
-        }
-    }
-
     /**
      * Standard setblock method for world generation
      */
-    private void setBlock(final short[][] result, final int x, final int y, final int z, final short blkid) {
+    private void setBlock(short[][] result, int x, int y, int z, short blkid) {
         if (result[y >> 4] == null) {
             result[y >> 4] = new short[4096];
         }
@@ -224,329 +238,75 @@ public class HybridGen extends PlotGenerator {
      */
     @Override
     public short[][] generateExtBlockSections(final World world, final Random random, int cx, int cz, final BiomeGrid biomes) {
-
-        final int maxY = world.getMaxHeight();
-        this.result = new short[maxY / 16][];
-
-        final int prime = 31;
-        int h = 1;
-        h = (prime * h) + cx;
-        h = (prime * h) + cz;
-        this.state = h;
-
-        double pathWidthLower;
-        if ((this.pathsize % 2) == 0) {
-            pathWidthLower = Math.floor(this.pathsize / 2) - 1;
-        } else {
-            pathWidthLower = Math.floor(this.pathsize / 2);
+        long start = System.nanoTime();
+        
+        // initializing with bedrock pre-made
+        this.result = initResult.clone();
+        
+        short sx = (short) ((cx << 4) % this.size);
+        short sz = (short) ((cz << 4) % this.size);
+        
+        if (sx < 0) {
+            sx += this.size;
         }
-        cx = (cx % this.size) + (8 * this.size);
-        cz = (cz % this.size) + (8 * this.size);
-        final int absX = (int) ((((cx * 16) + 16) - pathWidthLower - 1) + (8 * this.size));
-        final int absZ = (int) ((((cz * 16) + 16) - pathWidthLower - 1) + (8 * this.size));
-        final int plotMinX = (((absX) % this.size));
-        final int plotMinZ = (((absZ) % this.size));
-        int roadStartX = (plotMinX + this.pathsize);
-        int roadStartZ = (plotMinZ + this.pathsize);
-        if (roadStartX >= this.size) {
-            roadStartX -= this.size;
+        
+        if (sz < 0) {
+            sz += this.size;
         }
-        if (roadStartZ >= this.size) {
-            roadStartZ -= this.size;
-        }
-
-        // BOTTOM (1/1 cuboids)
+        
+        // Setting biomes
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 setBlock(this.result, x, 0, z, (short) 7);
                 biomes.setBiome(x, z, this.biome);
             }
         }
-        // ROAD (0/24) The following is an inefficient placeholder as it is too
-        // much work to finish it
-        if ((this.pathsize > 16) && ((plotMinX > roadStartX) || (plotMinZ > roadStartZ)) && !((roadStartX < 16) && (roadStartZ < 16)) && (((roadStartX > 16) && (roadStartZ > 16)) || ((plotMinX > roadStartX) && (plotMinZ > roadStartZ)))) {
-            setCuboidRegion(0, 16, 1, this.roadheight + 1, 0, 16, this.floor1);
-            return this.result;
-        }
-        if (((plotMinZ + 1) <= 16) || ((roadStartZ <= 16) && (roadStartZ > 0))) {
-            final int start = Math.max((16 - plotMinZ - this.pathsize) + 1, (16 - roadStartZ) + 1);
-            int end = Math.min(16 - plotMinZ - 1, (16 - roadStartZ) + this.pathsize);
-            if ((start >= 0) && (start <= 16) && (end < 0)) {
-                end = 16;
-            }
-            setCuboidRegion(0, 16, 1, this.roadheight + 1, Math.max(start, 0), Math.min(16, end), this.floor1);
-        }
-        if (((plotMinX + 1) <= 16) || ((roadStartX <= 16) && (roadStartX > 0))) {
-            final int start = Math.max((16 - plotMinX - this.pathsize) + 1, (16 - roadStartX) + 1);
-            int end = Math.min(16 - plotMinX - 1, (16 - roadStartX) + this.pathsize);
-            if ((start >= 0) && (start <= 16) && (end < 0)) {
-                end = 16;
-            }
-            setCuboidRegion(Math.max(start, 0), Math.min(16, end), 1, this.roadheight + 1, 0, 16, this.floor1);
-        }
-
-        // ROAD STRIPES
-        if ((this.pathsize > 4) && this.plotworld.ROAD_STRIPES_ENABLED) {
-            if ((plotMinZ + 2) <= 16) {
-                final int value = (plotMinZ + 2);
-                int start, end;
-                if ((plotMinX + 2) <= 16) {
-                    start = 16 - plotMinX - 1;
-                } else {
-                    start = 16;
-                }
-                if ((roadStartX - 1) <= 16) {
-                    end = (16 - roadStartX) + 1;
-                } else {
-                    end = 0;
-                }
-                if (!(((plotMinX + 2) <= 16) || ((roadStartX - 1) <= 16))) {
-                    start = 0;
-                }
-                setCuboidRegion(0, end, this.wallheight, this.wallheight + 1, 16 - value, (16 - value) + 1, this.floor2); //
-                setCuboidRegion(start, 16, this.wallheight, this.wallheight + 1, 16 - value, (16 - value) + 1, this.floor2); //
-            }
-            if ((plotMinX + 2) <= 16) {
-                final int value = (plotMinX + 2);
-                int start, end;
-                if ((plotMinZ + 2) <= 16) {
-                    start = 16 - plotMinZ - 1;
-                } else {
-                    start = 16;
-                }
-                if ((roadStartZ - 1) <= 16) {
-                    end = (16 - roadStartZ) + 1;
-                } else {
-                    end = 0;
-                }
-                if (!(((plotMinZ + 2) <= 16) || ((roadStartZ - 1) <= 16))) {
-                    start = 0;
-                }
-                setCuboidRegion(16 - value, (16 - value) + 1, this.wallheight, this.wallheight + 1, 0, end, this.floor2); //
-                setCuboidRegion(16 - value, (16 - value) + 1, this.wallheight, this.wallheight + 1, start, 16, this.floor2); //
-            }
-            if ((roadStartZ <= 16) && (roadStartZ > 1)) {
-                int start, end;
-                if ((plotMinX + 2) <= 16) {
-                    start = 16 - plotMinX - 1;
-                } else {
-                    start = 16;
-                }
-                if ((roadStartX - 1) <= 16) {
-                    end = (16 - roadStartX) + 1;
-                } else {
-                    end = 0;
-                }
-                if (!(((plotMinX + 2) <= 16) || ((roadStartX - 1) <= 16))) {
-                    start = 0;
-                }
-                setCuboidRegion(0, end, this.wallheight, this.wallheight + 1, (16 - roadStartZ) + 1, (16 - roadStartZ) + 2, this.floor2);
-                setCuboidRegion(start, 16, this.wallheight, this.wallheight + 1, (16 - roadStartZ) + 1, (16 - roadStartZ) + 2, this.floor2);
-            }
-            if ((roadStartX <= 16) && (roadStartX > 1)) {
-                int start, end;
-                if ((plotMinZ + 2) <= 16) {
-                    start = 16 - plotMinZ - 1;
-                } else {
-                    start = 16;
-                }
-                if ((roadStartZ - 1) <= 16) {
-                    end = (16 - roadStartZ) + 1;
-                } else {
-                    end = 0;
-                }
-                if (!(((plotMinZ + 2) <= 16) || ((roadStartZ - 1) <= 16))) {
-                    start = 0;
-                }
-                setCuboidRegion((16 - roadStartX) + 1, (16 - roadStartX) + 2, this.wallheight, this.wallheight + 1, 0, end, this.floor2); //
-                setCuboidRegion((16 - roadStartX) + 1, (16 - roadStartX) + 2, this.wallheight, this.wallheight + 1, start, 16, this.floor2); //
-            }
-        }
-
-        // Plot filling (28/28 cuboids) (10x2 + 4x2)
-        if (this.plotsize > 16) {
-            if (roadStartX <= 16) {
-                if (roadStartZ <= 16) {
-                    setCuboidRegion(0, 16 - roadStartX, 1, this.plotheight, 0, 16 - roadStartZ, this.filling);
-                    setCuboidRegion(0, 16 - roadStartX, this.plotheight, this.plotheight + 1, 0, 16 - roadStartZ, this.plotfloors);
-                }
-                if (plotMinZ <= 16) {
-                    setCuboidRegion(0, 16 - roadStartX, 1, this.plotheight, 16 - plotMinZ, 16, this.filling);
-                    setCuboidRegion(0, 16 - roadStartX, this.plotheight, this.plotheight + 1, 16 - plotMinZ, 16, this.plotfloors);
-                }
-            } else {
-                if (roadStartZ <= 16) {
-                    if (plotMinX > 16) {
-                        setCuboidRegion(0, 16, 1, this.plotheight, 0, 16 - roadStartZ, this.filling);
-                        setCuboidRegion(0, 16, this.plotheight, this.plotheight + 1, 0, 16 - roadStartZ, this.plotfloors);
+        for (short x = 0; x < 16; x++) {
+            for (short z = 0; z < 16; z++) {
+                
+                short absX = (short) ((sx + x) % this.size);
+                short absZ = (short) ((sz + z) % this.size);
+                
+                boolean gx = absX > pathWidthLower;
+                boolean gz = absZ > pathWidthLower;
+                
+                boolean lx = absX < pathWidthUpper;
+                boolean lz = absZ < pathWidthUpper;
+                
+                // inside plot
+                if (gx && gz && lx && lz) {
+                    for (short y = 1; y < this.plotheight; y++) {
+                        setBlock(this.result, x, y, z, this.filling);
                     }
-                }
-            }
-            if (plotMinX <= 16) {
-                if (plotMinZ <= 16) {
-                    setCuboidRegion(16 - plotMinX, 16, 1, this.plotheight, 16 - plotMinZ, 16, this.filling);
-                    setCuboidRegion(16 - plotMinX, 16, this.plotheight, this.plotheight + 1, 16 - plotMinZ, 16, this.plotfloors);
+                    setBlock(this.result, x, this.plotheight, z, this.plotfloors);
                 } else {
-                    int z = 16 - roadStartZ;
-                    if (z < 0) {
-                        z = 16;
+                    // wall
+                    if ((absX >= pathWidthLower && absX <= pathWidthUpper && absZ >= pathWidthLower && absZ <= pathWidthUpper))
+                    {
+                        for (short y = 1; y <= this.wallheight; y++) {
+                            setBlock(this.result, x, y, z, this.wallfilling);
+                        }
+                        setBlock(this.result, x, this.wallheight + 1, z, this.wall);
                     }
-                    setCuboidRegion(16 - plotMinX, 16, 1, this.plotheight, 0, z, this.filling);
-                    setCuboidRegion(16 - plotMinX, 16, this.plotheight, this.plotheight + 1, 0, z, this.plotfloors);
-                }
-                if (roadStartZ <= 16) {
-                    setCuboidRegion(16 - plotMinX, 16, 1, this.plotheight, 0, 16 - roadStartZ, this.filling);
-                    setCuboidRegion(16 - plotMinX, 16, this.plotheight, this.plotheight + 1, 0, 16 - roadStartZ, this.plotfloors);
-                } else {
-                    if (roadStartX <= 16) {
-                        if (plotMinZ > 16) {
-                            int x = 16 - roadStartX;
-                            if (x < 0) {
-                                x = 16;
-                            }
-                            setCuboidRegion(0, x, 1, this.plotheight, 0, 16, this.filling);
-                            setCuboidRegion(0, x, this.plotheight, this.plotheight + 1, 0, 16, this.plotfloors);
-                        }
-                    }
-                }
-            } else {
-                if (plotMinZ <= 16) {
-                    if (roadStartX > 16) {
-                        int x = 16 - roadStartX;
-                        if (x < 0) {
-                            x = 16;
-                        }
-                        setCuboidRegion(0, x, 1, this.plotheight, 16 - plotMinZ, 16, this.filling);
-                        setCuboidRegion(0, x, this.plotheight, this.plotheight + 1, 16 - plotMinZ, 16, this.plotfloors);
-                    }
-                } else {
-                    if (roadStartZ > 16) {
-                        int x = 16 - roadStartX;
-                        if (x < 0) {
-                            x = 16;
-                        }
-                        int z = 16 - roadStartZ;
-                        if (z < 0) {
-                            z = 16;
-                        }
-                        if (roadStartX > 16) {
-                            setCuboidRegion(0, x, 1, this.plotheight, 0, z, this.filling);
-                            setCuboidRegion(0, x, this.plotheight, this.plotheight + 1, 0, z, this.plotfloors);
-                        } else {
-                            setCuboidRegion(0, x, 1, this.plotheight, 0, z, this.filling);
-                            setCuboidRegion(0, x, this.plotheight, this.plotheight + 1, 0, z, this.plotfloors);
+                    // road
+                    else
+                    {
+                        for (short y = 1; y <= this.roadheight; y++) {
+                            setBlock(this.result, x, y, z, this.roadblock);
                         }
                     }
                 }
             }
-        } else {
-            if (roadStartX <= 16) {
-                if (roadStartZ <= 16) {
-                    setCuboidRegion(0, 16 - roadStartX, 1, this.plotheight, 0, 16 - roadStartZ, this.filling);
-                    setCuboidRegion(0, 16 - roadStartX, this.plotheight, this.plotheight + 1, 0, 16 - roadStartZ, this.plotfloors);
-                }
-                if (plotMinZ <= 16) {
-                    setCuboidRegion(0, 16 - roadStartX, 1, this.plotheight, 16 - plotMinZ, 16, this.filling);
-                    setCuboidRegion(0, 16 - roadStartX, this.plotheight, this.plotheight + 1, 16 - plotMinZ, 16, this.plotfloors);
-                }
-            }
-            if (plotMinX <= 16) {
-                if (plotMinZ <= 16) {
-                    setCuboidRegion(16 - plotMinX, 16, 1, this.plotheight, 16 - plotMinZ, 16, this.filling);
-                    setCuboidRegion(16 - plotMinX, 16, this.plotheight, this.plotheight + 1, 16 - plotMinZ, 16, this.plotfloors);
-                }
-                if (roadStartZ <= 16) {
-                    setCuboidRegion(16 - plotMinX, 16, 1, this.plotheight, 0, 16 - roadStartZ, this.filling);
-                    setCuboidRegion(16 - plotMinX, 16, this.plotheight, this.plotheight + 1, 0, 16 - roadStartZ, this.plotfloors);
-                }
-            }
         }
-
-        // WALLS (16/16 cuboids)
-        if (this.pathsize > 0) {
-            if ((plotMinZ + 1) <= 16) {
-                int start, end;
-                if ((plotMinX + 2) <= 16) {
-                    start = 16 - plotMinX - 1;
-                } else {
-                    start = 16;
-                }
-                if ((roadStartX - 1) <= 16) {
-                    end = (16 - roadStartX) + 1;
-                } else {
-                    end = 0;
-                }
-                if (!(((plotMinX + 2) <= 16) || ((roadStartX - 1) <= 16))) {
-                    start = 0;
-                }
-                setCuboidRegion(0, end, 1, this.wallheight + 1, 16 - plotMinZ - 1, 16 - plotMinZ, this.wallfilling);
-                setCuboidRegion(0, end, this.wallheight + 1, this.wallheight + 2, 16 - plotMinZ - 1, 16 - plotMinZ, this.wall);
-                setCuboidRegion(start, 16, 1, this.wallheight + 1, 16 - plotMinZ - 1, 16 - plotMinZ, this.wallfilling);
-                setCuboidRegion(start, 16, this.wallheight + 1, this.wallheight + 2, 16 - plotMinZ - 1, 16 - plotMinZ, this.wall);
-            }
-            if ((plotMinX + 1) <= 16) {
-                int start, end;
-                if ((plotMinZ + 2) <= 16) {
-                    start = 16 - plotMinZ - 1;
-                } else {
-                    start = 16;
-                }
-                if ((roadStartZ - 1) <= 16) {
-                    end = (16 - roadStartZ) + 1;
-                } else {
-                    end = 0;
-                }
-                if (!(((plotMinZ + 2) <= 16) || ((roadStartZ - 1) <= 16))) {
-                    start = 0;
-                }
-                setCuboidRegion(16 - plotMinX - 1, 16 - plotMinX, 1, this.wallheight + 1, 0, end, this.wallfilling);
-                setCuboidRegion(16 - plotMinX - 1, 16 - plotMinX, this.wallheight + 1, this.wallheight + 2, 0, end, this.wall);
-                setCuboidRegion(16 - plotMinX - 1, 16 - plotMinX, 1, this.wallheight + 1, start, 16, this.wallfilling);
-                setCuboidRegion(16 - plotMinX - 1, 16 - plotMinX, this.wallheight + 1, this.wallheight + 2, start, 16, this.wall);
-            }
-            if ((roadStartZ <= 16) && (roadStartZ > 0)) {
-                int start, end;
-                if ((plotMinX + 1) <= 16) {
-                    start = 16 - plotMinX;
-                } else {
-                    start = 16;
-                }
-                if ((roadStartX + 1) <= 16) {
-                    end = (16 - roadStartX) + 1;
-                } else {
-                    end = 0;
-                }
-                if (!(((plotMinX + 1) <= 16) || (roadStartX <= 16))) {
-                    start = 0;
-                }
-                setCuboidRegion(0, end, 1, this.wallheight + 1, 16 - roadStartZ, (16 - roadStartZ) + 1, this.wallfilling);
-                setCuboidRegion(0, end, this.wallheight + 1, this.wallheight + 2, 16 - roadStartZ, (16 - roadStartZ) + 1, this.wall);
-                setCuboidRegion(start, 16, 1, this.wallheight + 1, 16 - roadStartZ, (16 - roadStartZ) + 1, this.wallfilling);
-                setCuboidRegion(start, 16, this.wallheight + 1, this.wallheight + 2, 16 - roadStartZ, (16 - roadStartZ) + 1, this.wall);
-            }
-            if ((roadStartX <= 16) && (roadStartX > 0)) {
-                int start, end;
-                if ((plotMinZ + 1) <= 16) {
-                    start = 16 - plotMinZ;
-                } else {
-                    start = 16;
-                }
-                if ((roadStartZ + 1) <= 16) {
-                    end = (16 - roadStartZ) + 1;
-                } else {
-                    end = 0;
-                }
-                if (!(((plotMinZ + 1) <= 16) || ((roadStartZ + 1) <= 16))) {
-                    start = 0;
-                }
-                setCuboidRegion(16 - roadStartX, (16 - roadStartX) + 1, 1, this.wallheight + 1, 0, end, this.wallfilling);
-                setCuboidRegion(16 - roadStartX, (16 - roadStartX) + 1, this.wallheight + 1, this.roadheight + 2, 0, end, this.wall);
-                setCuboidRegion(16 - roadStartX, (16 - roadStartX) + 1, 1, this.wallheight + 1, start, 16, this.wallfilling);
-                setCuboidRegion(16 - roadStartX, (16 - roadStartX) + 1, this.wallheight + 1, this.wallheight + 2, start, 16, this.wall);
-            }
+        
+        // TODO generate schematics
+        for (block : schematic.values()) {
+            //set the block
         }
-        // Return the chunk
+        
+        
+        System.out.print(System.nanoTime() - start);
+        
         return this.result;
     }
-
 }

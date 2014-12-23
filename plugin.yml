@@ -1,0 +1,8 @@
+name: HybridPlots
+main: com.empcraft.hybrid.Main
+version: 0.0.1
+load: STARTUP
+description: Hybrid plot generation
+authors: [Empire92, Citymonstret]
+softdepend: [WorldEdit, PlotSquared]
+database: false
