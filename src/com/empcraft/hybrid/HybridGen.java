@@ -22,12 +22,10 @@
 package com.empcraft.hybrid;
 
 import com.intellectualcrafters.plot.PlotMain;
-import com.intellectualcrafters.plot.object.PlotBlock;
 import com.intellectualcrafters.plot.object.PlotGenerator;
 import com.intellectualcrafters.plot.object.PlotManager;
 import com.intellectualcrafters.plot.object.PlotWorld;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
@@ -70,6 +68,7 @@ public class HybridGen extends PlotGenerator {
     final short[] filling;
     final short pathWidthLower;
     final short pathWidthUpper;
+    boolean doState = false;
     /**
      * result object is returned for each generated chunk, do stuff to it
      */
@@ -113,6 +112,10 @@ public class HybridGen extends PlotGenerator {
             this.filling[i] = this.plotworld.MAIN_BLOCK[i].id;
         }
         
+        if (this.filling.length > 1 || this.plotfloors.length > 1) {
+            this.doState = true;
+        }
+        
         this.wallheight = this.plotworld.WALL_HEIGHT;
         this.roadheight = this.plotworld.ROAD_HEIGHT;
         this.plotheight = this.plotworld.PLOT_HEIGHT;
@@ -126,19 +129,6 @@ public class HybridGen extends PlotGenerator {
         this.pathWidthUpper = (short) (this.pathWidthLower + this.plotsize + 1);
         
         this.biome = this.plotworld.PLOT_BIOME;
-        int maxY;
-        try {
-            maxY = Bukkit.getWorld(world).getMaxHeight();
-        }
-        catch (NullPointerException e) {
-            maxY = 256;
-        }
-        this.initResult = new short[maxY / 16][];
-        for (short x = 0; x < 16; x++) {
-            for (short z = 0; z < 16; z++) {
-                setBlock(this.initResult, x, 0, z, (short) 7);
-            }
-        }
     }
 
     /**
@@ -242,6 +232,14 @@ public class HybridGen extends PlotGenerator {
         
         // initializing with bedrock pre-made
         this.result = initResult.clone();
+
+        if (doState) {
+            final int prime = 13;
+            int h = 1;
+            h = (prime * h) + cx;
+            h = (prime * h) + cz;
+            this.state = h;
+        }
         
         short sx = (short) ((cx << 4) % this.size);
         short sz = (short) ((cz << 4) % this.size);
@@ -289,8 +287,7 @@ public class HybridGen extends PlotGenerator {
                         setBlock(this.result, x, this.wallheight + 1, z, this.wall);
                     }
                     // road
-                    else
-                    {
+                    else {
                         for (short y = 1; y <= this.roadheight; y++) {
                             setBlock(this.result, x, y, z, this.roadblock);
                         }
@@ -298,12 +295,6 @@ public class HybridGen extends PlotGenerator {
                 }
             }
         }
-        
-        // TODO generate schematics
-        for (block : schematic.values()) {
-            //set the block
-        }
-        
         
         System.out.print(System.nanoTime() - start);
         
