@@ -26,9 +26,11 @@ import com.intellectualcrafters.plot.object.PlotGenerator;
 import com.intellectualcrafters.plot.object.PlotManager;
 import com.intellectualcrafters.plot.object.PlotWorld;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
+import org.bukkit.block.Block;
 import org.bukkit.generator.BlockPopulator;
 
 import java.util.Arrays;
@@ -228,17 +230,57 @@ public class HybridGen extends PlotGenerator {
      */
     @Override
     public short[][] generateExtBlockSections(final World world, final Random random, int cx, int cz, final BiomeGrid biomes) {
+        
         long start = System.nanoTime();
         
-        // initializing with bedrock pre-made
-        this.result = initResult.clone();
-
         if (doState) {
             final int prime = 13;
             int h = 1;
             h = (prime * h) + cx;
             h = (prime * h) + cz;
             this.state = h;
+        }
+        
+        // initializing with bedrock pre-made
+        this.result = initResult.clone();
+        
+        PlotWrapper plot = ((HybridPlotManager) this.manager).currentPlotClear;
+        if (plot != null) {
+            
+            int X = cx << 4;
+            int Z = cx << 4;
+            
+            short sx = (short) ((X) % this.size);
+            short sz = (short) ((Z) % this.size);
+            
+            if (sx < 0) {
+                sx += this.size;
+            }
+            
+            if (sz < 0) {
+                sz += this.size;
+            }
+            
+            for (short x = 0; x < 16; x++) {
+                for (short z = 0; z < 16; z++) {
+                    if (isIn(plot, X + x, Z + z)) {
+                        biomes.setBiome(x, z, this.biome);
+                        for (short y = 1; y < this.plotheight; y++) {
+                            setBlock(this.result, x, y, z, this.filling);
+                        }
+                        setBlock(this.result, x, this.plotheight, z, this.plotfloors);
+                    }
+                    else {
+                        for (short y = 1; y < 256; y++) {
+                            Block block = world.getBlockAt(X + x, y, Z + z);
+                            short type = (short) block.getTypeId();
+                            if (type != 0) {
+                                setBlock(this.result, x, y, z, type);
+                            }
+                        }
+                    }
+                }
+            }
         }
         
         short sx = (short) ((cx << 4) % this.size);
@@ -251,16 +293,12 @@ public class HybridGen extends PlotGenerator {
         if (sz < 0) {
             sz += this.size;
         }
+
         
-        // Setting biomes
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                setBlock(this.result, x, 0, z, (short) 7);
-                biomes.setBiome(x, z, this.biome);
-            }
-        }
         for (short x = 0; x < 16; x++) {
             for (short z = 0; z < 16; z++) {
+                
+                biomes.setBiome(x, z, this.biome);
                 
                 short absX = (short) ((sx + x) % this.size);
                 short absZ = (short) ((sz + z) % this.size);
@@ -299,5 +337,9 @@ public class HybridGen extends PlotGenerator {
         System.out.print(System.nanoTime() - start);
         
         return this.result;
+    }
+    
+    public boolean isIn(PlotWrapper plot, int x, int z) {
+        return (x >= plot.minX && x <= plot.maxX && z >= plot.minZ && z <= plot.maxZ);
     }
 }
