@@ -2,13 +2,11 @@ package com.empcraft.hybrid;
 
 
 public class BlockLoc {
-    public short x;
-    public short y;
-    public short z;
+    public int x;
+    public int z;
     
-    public BlockLoc(short x, short y, short z) {
+    public BlockLoc(int x, int z) {
         this.x = x;
-        this.y = y;
         this.z = z;
         
     }
@@ -18,7 +16,6 @@ public class BlockLoc {
         final int prime = 31;
         int result = 1;
         result = (prime * result) + this.x;
-        result = (prime * result) + this.y;
         result = (prime * result) + this.z;
         return result;
     }
@@ -35,7 +32,7 @@ public class BlockLoc {
             return false;
         }
         BlockLoc other = (BlockLoc) obj;
-        return ((this.x == other.x) && (this.y == other.y) && (this.z == other.z));
+        return ((this.x == other.x) && (this.z == other.z));
     }
     
 }

@@ -34,8 +34,10 @@ import org.bukkit.block.Block;
 import org.bukkit.generator.BlockPopulator;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * The default generator is very messy, as we have decided to try externalize all calculations from within the loop. -
@@ -71,6 +73,7 @@ public class HybridGen extends PlotGenerator {
     final short pathWidthLower;
     final short pathWidthUpper;
     boolean doState = false;
+    int maxY;
     /**
      * result object is returned for each generated chunk, do stuff to it
      */
@@ -131,6 +134,19 @@ public class HybridGen extends PlotGenerator {
         this.pathWidthUpper = (short) (this.pathWidthLower + this.plotsize + 1);
         
         this.biome = this.plotworld.PLOT_BIOME;
+        
+        try {
+            maxY = Bukkit.getWorld(world).getMaxHeight();
+        }
+        catch (NullPointerException e) {
+            maxY = 256;
+        }
+        this.initResult = new short[maxY / 16][];
+        for (short x = 0; x < 16; x++) {
+            for (short z = 0; z < 16; z++) {
+                setBlock(this.initResult, x, 0, z, (short) 7);
+            }
+        }
     }
 
     /**
@@ -271,12 +287,10 @@ public class HybridGen extends PlotGenerator {
                         setBlock(this.result, x, this.plotheight, z, this.plotfloors);
                     }
                     else {
-                        for (short y = 1; y < 256; y++) {
-                            Block block = world.getBlockAt(X + x, y, Z + z);
-                            short type = (short) block.getTypeId();
-                            if (type != 0) {
-                                setBlock(this.result, x, y, z, type);
-                            }
+                        BlockLoc loc = new BlockLoc(X + x, Z + z);
+                        HashMap<Integer, Integer> blocks = plot.blocks.get(loc);
+                        for (int y : blocks.keySet()) {
+                            setBlock(this.result, x, y, z, blocks.get(y).shortValue());
                         }
                     }
                 }

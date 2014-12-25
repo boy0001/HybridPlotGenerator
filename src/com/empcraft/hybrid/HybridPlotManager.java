@@ -37,6 +37,7 @@ import org.bukkit.block.Block;
 import org.bukkit.plugin.Plugin;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 @SuppressWarnings("deprecation") public class HybridPlotManager extends PlotManager {
 
@@ -233,15 +234,54 @@ import java.util.ArrayList;
     public boolean clearPlot(final World world, final Plot plot, final boolean isDelete) {
         final Location pos1 = PlotHelper.getPlotBottomLoc(world, plot.id).add(1, 0, 1);
         final Location pos2 = PlotHelper.getPlotTopLoc(world, plot.id);
-        final int startX = (pos1.getBlockX() / 16) * 16;
-        final int startZ = (pos1.getBlockZ() / 16) * 16;
-        final int chunkX = 16 + pos2.getBlockX();
-        final int chunkZ = 16 + pos2.getBlockZ();
+        
+        int p1x = pos1.getBlockX();
+        int p1z = pos1.getBlockZ();
+        
+        int p2x = pos2.getBlockX();
+        int p2z = pos2.getBlockZ();
+        
+        final int startX = (p1x / 16) * 16;
+        final int startZ = (p1z / 16) * 16;
+        final int chunkX = 16 + p2x;
+        final int chunkZ = 16 + p2z;
 
         this.currentPlotClear = new PlotWrapper(pos1.getBlockX(), pos2.getBlockX(), pos1.getBlockZ(), pos2.getBlockZ());
         
+        int maxY = world.getMaxHeight();
+        
         for (int i = startX; i < chunkX; i += 16) {
             for (int j = startZ; j < chunkZ; j += 16) {
+                
+                this.currentPlotClear.blocks = new HashMap<>();
+                
+                if (i < p1x || j < p1z) {
+                    for (int x = 0; x < 16; x++) {
+                        for (int z = 0; z < 16; z++) {
+                            if ((i + x < p1x || j + z < p1z)) {
+                                HashMap<Integer, Integer> ids = new HashMap<>();
+                                for (int y = 0; y < maxY; y++) {
+                                    int id = world.getBlockTypeIdAt(i + x, y, j + z);
+                                    if (id != 0) {
+                                        ids.put(y, id);
+                                    }
+                                }
+                                BlockLoc loc = new BlockLoc(i + z, j + z);
+                                this.currentPlotClear.blocks.put(loc, ids);
+                            }
+                        }
+                    }
+                }
+                else if (i + 15 > p2x || j+15 >= p2z) {
+                    for (int x = 0; x < 16; x++) {
+                        for (int z = 0; z < 16; z++) {
+                            if ((i + x > p2x || j + z > p2z)) {
+                                
+                            }
+                        }
+                    }
+                }
+                
                 world.regenerateChunk(i / 16, j / 16);
             }
         }
