@@ -30,14 +30,12 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
-import org.bukkit.block.Block;
 import org.bukkit.generator.BlockPopulator;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 
 /**
  * The default generator is very messy, as we have decided to try externalize all calculations from within the loop. -
@@ -53,7 +51,6 @@ public class HybridGen extends PlotGenerator {
      */
     private static PlotManager manager = null;
     
-    public static short[][] initResult;
     /**
      * Some generator specific variables (implementation dependent)
      */
@@ -140,12 +137,6 @@ public class HybridGen extends PlotGenerator {
         }
         catch (NullPointerException e) {
             maxY = 256;
-        }
-        this.initResult = new short[maxY / 16][];
-        for (short x = 0; x < 16; x++) {
-            for (short z = 0; z < 16; z++) {
-                setBlock(this.initResult, x, 0, z, (short) 7);
-            }
         }
     }
 
@@ -246,9 +237,6 @@ public class HybridGen extends PlotGenerator {
      */
     @Override
     public short[][] generateExtBlockSections(final World world, final Random random, int cx, int cz, final BiomeGrid biomes) {
-        
-        long start = System.nanoTime();
-        
         if (doState) {
             final int prime = 13;
             int h = 1;
@@ -257,14 +245,18 @@ public class HybridGen extends PlotGenerator {
             this.state = h;
         }
         
-        // initializing with bedrock pre-made
-        this.result = initResult.clone();
+        this.result = new short[maxY / 16][];
+        for (short x = 0; x < 16; x++) {
+            for (short z = 0; z < 16; z++) {
+                setBlock(this.result, x, 0, z, (short) 7);
+            }
+        }
         
         PlotWrapper plot = ((HybridPlotManager) this.manager).currentPlotClear;
         if (plot != null) {
             
             int X = cx << 4;
-            int Z = cx << 4;
+            int Z = cz << 4;
             
             short sx = (short) ((X) % this.size);
             short sz = (short) ((Z) % this.size);
@@ -289,12 +281,16 @@ public class HybridGen extends PlotGenerator {
                     else {
                         BlockLoc loc = new BlockLoc(X + x, Z + z);
                         HashMap<Integer, Integer> blocks = plot.blocks.get(loc);
-                        for (int y : blocks.keySet()) {
-                            setBlock(this.result, x, y, z, blocks.get(y).shortValue());
+                        if (blocks != null) {
+                            for (Integer y : blocks.keySet()) {
+                                setBlock(this.result, x, y, z, blocks.get(y).shortValue());
+                            }
                         }
                     }
                 }
             }
+            
+            return this.result;
         }
         
         short sx = (short) ((cx << 4) % this.size);
@@ -347,9 +343,6 @@ public class HybridGen extends PlotGenerator {
                 }
             }
         }
-        
-        System.out.print(System.nanoTime() - start);
-        
         return this.result;
     }
     

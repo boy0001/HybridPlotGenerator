@@ -235,54 +235,82 @@ import java.util.HashMap;
         final Location pos1 = PlotHelper.getPlotBottomLoc(world, plot.id).add(1, 0, 1);
         final Location pos2 = PlotHelper.getPlotTopLoc(world, plot.id);
         
-        int p1x = pos1.getBlockX();
-        int p1z = pos1.getBlockZ();
-        
-        int p2x = pos2.getBlockX();
-        int p2z = pos2.getBlockZ();
-        
-        final int startX = (p1x / 16) * 16;
-        final int startZ = (p1z / 16) * 16;
-        final int chunkX = 16 + p2x;
-        final int chunkZ = 16 + p2z;
+        Chunk c1 = world.getChunkAt(pos1);
+        Chunk c2 = world.getChunkAt(pos2);
 
         this.currentPlotClear = new PlotWrapper(pos1.getBlockX(), pos2.getBlockX(), pos1.getBlockZ(), pos2.getBlockZ());
         
+        int sx = pos1.getBlockX();
+        int sz = pos1.getBlockZ();
+        int ex = pos2.getBlockX();
+        int ez = pos2.getBlockZ();
+        
+        int c1x = c1.getX();
+        int c1z = c1.getZ();
+        int c2x = c2.getX();
+        int c2z = c2.getZ();
+        
         int maxY = world.getMaxHeight();
         
-        for (int i = startX; i < chunkX; i += 16) {
-            for (int j = startZ; j < chunkZ; j += 16) {
+        for (int x = c1x; x <= c2x; x ++) {
+            for (int z = c1z; z <= c2z; z ++) {
                 
-                this.currentPlotClear.blocks = new HashMap<>();
+                Chunk chunk = world.getChunkAt(x, z);
                 
-                if (i < p1x || j < p1z) {
-                    for (int x = 0; x < 16; x++) {
-                        for (int z = 0; z < 16; z++) {
-                            if ((i + x < p1x || j + z < p1z)) {
-                                HashMap<Integer, Integer> ids = new HashMap<>();
-                                for (int y = 0; y < maxY; y++) {
-                                    int id = world.getBlockTypeIdAt(i + x, y, j + z);
-                                    if (id != 0) {
-                                        ids.put(y, id);
+                boolean loaded = true;
+                
+                if (!chunk.isLoaded()) {
+                    boolean result = chunk.load(false);
+                    if (!result) {
+                        loaded = false;;
+                    }
+                    if (!chunk.isLoaded()) {
+                        loaded = false;
+                    }
+                }
+                
+                if (loaded) {
+                    int absX = x << 4;
+                    int absZ = z << 4;
+                    
+                    this.currentPlotClear.blocks = new HashMap<>();
+                    
+                    if (x == c1x || z == c1z) {
+                        for (int X = 0; X < 16; X++) {
+                            for (int Z = 0; Z < 16; Z++) {
+                                if ((X + absX < sx || Z + absZ < sz) || (X + absX > ex || Z + absZ > ez)) {
+                                    HashMap<Integer, Integer> ids = new HashMap<>();
+                                    for (int y = 1; y < maxY; y++) {
+                                        int id = world.getBlockTypeIdAt(X + absX, y, Z + absZ);
+                                        if (id != 0) {
+                                            ids.put(y, id);
+                                        }
                                     }
+                                    BlockLoc loc = new BlockLoc(X + absX, Z + absZ);
+                                    this.currentPlotClear.blocks.put(loc, ids);
                                 }
-                                BlockLoc loc = new BlockLoc(i + z, j + z);
-                                this.currentPlotClear.blocks.put(loc, ids);
                             }
                         }
                     }
-                }
-                else if (i + 15 > p2x || j+15 >= p2z) {
-                    for (int x = 0; x < 16; x++) {
-                        for (int z = 0; z < 16; z++) {
-                            if ((i + x > p2x || j + z > p2z)) {
-                                
+                    else if (x == c2x || z == c2z) {
+                        for (int X = 0; X < 16; X++) {
+                            for (int Z = 0; Z < 16; Z++) {
+                                if ((X + absX > ex || Z + absZ > ez) || (X + absX < sx || Z + absZ < sz)) {
+                                    HashMap<Integer, Integer> ids = new HashMap<>();
+                                    for (int y = 1; y < maxY; y++) {
+                                        int id = world.getBlockTypeIdAt(X + absX, y, Z + absZ);
+                                        if (id != 0) {
+                                            ids.put(y, id);
+                                        }
+                                    }
+                                    BlockLoc loc = new BlockLoc(X + absX, Z + absZ);
+                                    this.currentPlotClear.blocks.put(loc, ids);
+                                }
                             }
                         }
                     }
+                    world.regenerateChunk(x, z);
                 }
-                
-                world.regenerateChunk(i / 16, j / 16);
             }
         }
         

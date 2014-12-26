@@ -1,5 +1,6 @@
 package com.empcraft.hybrid;
 
+import com.intellectualcrafters.plot.PlotMain;
 import com.intellectualcrafters.plot.object.PlotWorld;
 
 import org.bukkit.Chunk;
@@ -116,8 +117,6 @@ public class HybridPop extends BlockPopulator {
 
     @Override
     public void populate(final World w, final Random r, final Chunk c) {
-        long start = System.nanoTime();
-        
         // initializing with bedrock pre-made
         int cx = c.getX(), cz = c.getZ();
         
@@ -127,6 +126,41 @@ public class HybridPop extends BlockPopulator {
             h = (prime * h) + cx;
             h = (prime * h) + cz;
             this.state = h;
+        }
+        
+        HybridPlotManager manager = (HybridPlotManager) PlotMain.getPlotManager(w);
+        PlotWrapper plot = manager.currentPlotClear;
+        if (plot != null) {
+            
+            int X = cx << 4;
+            int Z = cx << 4;
+            
+            short sx = (short) ((X) % this.size);
+            short sz = (short) ((Z) % this.size);
+            
+            if (sx < 0) {
+                sx += this.size;
+            }
+            
+            if (sz < 0) {
+                sz += this.size;
+            }
+            
+            for (short x = 0; x < 16; x++) {
+                for (short z = 0; z < 16; z++) {
+                    if (isIn(plot, X + x, Z + z)) {
+                        if (doFilling) {
+                            for (short y = 1; y < this.plotheight; y++) {
+                                setBlock(w, x, y, z, this.filling);
+                            }
+                        }
+                        if (doFloor) {
+                            setBlock(w, x,(short) this.plotheight, z, this.plotfloors);
+                        }
+                    }
+                }
+            }
+            return;
         }
         
         short sx = (short) ((cx << 4) % this.size);
@@ -186,8 +220,6 @@ public class HybridPop extends BlockPopulator {
                     }
                 }
             }
-            
-            System.out.print(System.nanoTime() - start);
         }
     }
 
@@ -204,6 +236,10 @@ public class HybridPop extends BlockPopulator {
     @SuppressWarnings("deprecation")
     private void setBlock(final World w, final short x, final short y, final short z, final byte val) {
         w.getBlockAt(this.X + x, y, this.Z + z).setData(val, false);
+    }
+    
+    public boolean isIn(PlotWrapper plot, int x, int z) {
+        return (x >= plot.minX && x <= plot.maxX && z >= plot.minZ && z <= plot.maxZ);
     }
 
 }
