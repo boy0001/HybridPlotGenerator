@@ -279,10 +279,10 @@ public class HybridGen extends PlotGenerator {
                         setBlock(this.result, x, this.plotheight, z, this.plotfloors);
                     }
                     else {
-                        BlockLoc loc = new BlockLoc(X + x, Z + z);
-                        HashMap<Integer, Integer> blocks = plot.blocks.get(loc);
+                        ChunkLoc loc = new ChunkLoc(X + x, Z + z);
+                        HashMap<Short, Short> blocks = plot.blocks.get(loc);
                         if (blocks != null) {
-                            for (Integer y : blocks.keySet()) {
+                            for (short y : blocks.keySet()) {
                                 setBlock(this.result, x, y, z, blocks.get(y).shortValue());
                             }
                         }

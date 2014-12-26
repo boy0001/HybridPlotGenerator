@@ -8,6 +8,7 @@ import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.generator.BlockPopulator;
 
+import java.util.HashMap;
 import java.util.Random;
 
 /**
@@ -128,12 +129,12 @@ public class HybridPop extends BlockPopulator {
             this.state = h;
         }
         
+        this.X = cx << 4;
+        this.Z = cz << 4;
+        
         HybridPlotManager manager = (HybridPlotManager) PlotMain.getPlotManager(w);
         PlotWrapper plot = manager.currentPlotClear;
         if (plot != null) {
-            
-            int X = cx << 4;
-            int Z = cx << 4;
             
             short sx = (short) ((X) % this.size);
             short sz = (short) ((Z) % this.size);
@@ -158,13 +159,22 @@ public class HybridPop extends BlockPopulator {
                             setBlock(w, x,(short) this.plotheight, z, this.plotfloors);
                         }
                     }
+                    else {
+                        ChunkLoc loc = new ChunkLoc(X + x, Z + z);
+                        HashMap<Short, Byte> data = plot.data.get(loc);
+                        if (data != null) {
+                            for (short y : data.keySet()) {
+                                setBlock(w, x, y, z, data.get(y).byteValue());
+                            }
+                        }
+                    }
                 }
             }
             return;
         }
         
-        short sx = (short) ((cx << 4) % this.size);
-        short sz = (short) ((cz << 4) % this.size);
+        short sx = (short) ((X) % this.size);
+        short sz = (short) ((Z) % this.size);
         
         if (sx < 0) {
             sx += this.size;
